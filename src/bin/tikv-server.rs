@@ -90,6 +90,7 @@ fn build_raftkv(matches: &Matches,
     let mut opts = RocksdbOptions::new();
     let mut block_base_opts = BlockBasedOptions::new();
     block_base_opts.set_block_size(64 * 1024);
+    block_base_opts.set_lru_cache(2 * 1024 * 1024 * 1024);
     opts.set_block_based_table_factory(&block_base_opts);
     opts.compression(DBCompressionType::DBNo);
     opts.set_write_buffer_size(64 * 1024 * 1024);
@@ -99,6 +100,7 @@ fn build_raftkv(matches: &Matches,
     opts.set_max_bytes_for_level_base(512 * 1024 * 1024);
     opts.set_target_file_size_base(64 * 1024 * 1024);
     opts.create_if_missing(true);
+    opts.set_max_open_files(-1);
 
     let engine = Arc::new(DB::open(&opts, &path).unwrap());
     let mut cfg = Config::new();

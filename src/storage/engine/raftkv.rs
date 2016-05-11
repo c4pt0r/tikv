@@ -38,6 +38,13 @@ use storage::engine;
 use super::{Engine, Modify, Snapshot};
 use util::event::Event;
 use storage::{Key, Value, KvPair};
+use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
+
+static GET_COUNT: AtomicUsize = ATOMIC_USIZE_INIT;
+static SEEK_COUNT: AtomicUsize = ATOMIC_USIZE_INIT;
+static PUT_COUNT: AtomicUsize = ATOMIC_USIZE_INIT;
+static DEL_COUNT: AtomicUsize = ATOMIC_USIZE_INIT;
+static SNAP_COUNT: AtomicUsize = ATOMIC_USIZE_INIT;
 
 const DEFAULT_TIMEOUT_SECS: u64 = 5;
 
@@ -203,12 +210,20 @@ impl<T: PdClient, Trans: Transport> Engine for RaftKv<T, Trans> {
             let mut req = Request::new();
             match m {
                 Modify::Delete(k) => {
+                    let cnt = DEL_COUNT.fetch_add(1, Ordering::SeqCst);
+                    if cnt % 10000 == 0 {
+                        info!("raftkv: del count {}", cnt);
+                    }
                     let mut delete = DeleteRequest::new();
                     delete.set_key(k.raw().clone());
                     req.set_cmd_type(CmdType::Delete);
                     req.set_delete(delete);
                 }
                 Modify::Put((k, v)) => {
+                    let cnt = PUT_COUNT.fetch_add(1, Ordering::SeqCst);
+                    if cnt % 10000 == 0 {
+                        info!("raftkv: put count {}", cnt);
+                    }
                     let mut put = PutRequest::new();
                     put.set_key(k.raw().clone());
                     put.set_value(v);
@@ -223,6 +238,11 @@ impl<T: PdClient, Trans: Transport> Engine for RaftKv<T, Trans> {
     }
 
     fn snapshot<'a>(&'a self, ctx: &Context) -> engine::Result<Box<Snapshot + 'a>> {
+        let cnt = SNAP_COUNT.fetch_add(1, Ordering::SeqCst);
+        if cnt % 10000 == 0 {
+            info!("raftkv: snap count {}", cnt);
+        }
+
         let mut req = Request::new();
         req.set_cmd_type(CmdType::Snap);
 
@@ -250,11 +270,21 @@ impl<T: PdClient, Trans: Transport> Engine for RaftKv<T, Trans> {
 
 impl<'a> Snapshot for RegionSnapshot<'a> {
     fn get(&self, key: &Key) -> engine::Result<Option<Value>> {
+        let cnt = GET_COUNT.fetch_add(1, Ordering::SeqCst);
+        if cnt % 10000 == 0 {
+            info!("raftkv: get count {}", cnt);
+        }
+
         let v = box_try!(self.get_value(key.raw()));
         Ok(v.map(|v| v.to_vec()))
     }
 
     fn seek(&self, key: &Key) -> engine::Result<Option<KvPair>> {
+        let cnt = SEEK_COUNT.fetch_add(1, Ordering::SeqCst);
+        if cnt % 10000 == 0 {
+            info!("raftkv: seek count {}", cnt);
+        }
+
         let pair = box_try!(self.seek(key.raw()));
         Ok(pair)
     }
